@@ -1,0 +1,12 @@
+rootProject.name = "pitboss"
+
+// Composite build: PitBoss is engine 7 of the ecosystem. Including SmokeHouse's build
+// transitively includes SuperBeefSort and CSRBT (nested composites); Gradle substitutes
+// every published coordinate with the live sibling sources.
+includeBuild("../SmokeHouse")
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}
