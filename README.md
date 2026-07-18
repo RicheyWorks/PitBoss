@@ -23,10 +23,38 @@ PitBoss never *decides* to promote — no consensus, no automatic failover, no w
 forwarding; the Phase 8 non-goals transfer verbatim, one floor up. Fencing the old primary
 before promoting is the operator's job, stated loudly.
 
+## Design notes
+
+- **Never decides, only does.** Promotion is human-triggered; PitBoss makes the runbook
+  atomic and on the record. Consensus, auto-failover, and write forwarding are non-goals
+  inherited verbatim from Phase 8 — adding any of them takes an ADR, not a patch.
+- **Cold starts are doctrine.** `rebootstrap` is close + wipe + reconnect from a fresh
+  shipped backup — a gapped replica is never patched in place, because a cold start is
+  always acceptable and a wrong replica never is.
+- **Caller-cadenced.** `tick()` runs on your thread at your rhythm; PitBoss owns no threads
+  (replication's threads belong to SmokeHouse). Each tick returns a `FleetReport` — lag,
+  gapped, rebootstrapped, per replica — so the floor's state is always one record.
+- **The primary belongs to the caller.** PitBoss never closes it, even during promotion;
+  fencing the old primary is the operator's job, stated loudly.
+
 ## The ecosystem
 
-Engines 1–6: [CSRBT](https://github.com/RicheyWorks/CSRBT) (index) · [SuperBeefSort](https://github.com/RicheyWorks/SuperBeefSort) (intake) · [SmokeHouse](https://github.com/RicheyWorks/SmokeHouse) (store) · [Carver](https://github.com/RicheyWorks/Carver) (read planner) · [Renderer](https://github.com/RicheyWorks/Renderer) (materialized views) · [Brine](https://github.com/RicheyWorks/Brine) (adaptive cache).
-Engines 7–11: [PitBoss](https://github.com/RicheyWorks/PitBoss) (fleet conductor) · [DryAge](https://github.com/RicheyWorks/DryAge) (time travel) · [Twine](https://github.com/RicheyWorks/Twine) (atomic batches) · [SmokeSignal](https://github.com/RicheyWorks/SmokeSignal) (the wire) · [Jerky](https://github.com/RicheyWorks/Jerky) (cold archives).
+Eleven engines, one organism — each in its own repo, composed by nested Gradle
+composite builds:
+
+| Engine | Role |
+|---|---|
+| [CSRBT](https://github.com/RicheyWorks/CSRBT) | the adaptive ordered index — orders the world |
+| [SuperBeefSort](https://github.com/RicheyWorks/SuperBeefSort) | the intake tract — profiles, sorts, feeds in O(n) |
+| [SmokeHouse](https://github.com/RicheyWorks/SmokeHouse) | the log-structured store — durability, tail, watchers, replicas |
+| [Carver](https://github.com/RicheyWorks/Carver) | the read planner — decides how to read |
+| [Renderer](https://github.com/RicheyWorks/Renderer) | the materialized-view engine — folds the tail into live aggregates |
+| [Brine](https://github.com/RicheyWorks/Brine) | the adaptive cache — eviction policy evolved per workload |
+| **PitBoss** (this repo) | the fleet conductor — lag watch, re-bootstrap, the promotion runbook |
+| [DryAge](https://github.com/RicheyWorks/DryAge) | the time-travel engine — as-of reads over preserved history |
+| [Twine](https://github.com/RicheyWorks/Twine) | crash-atomic multi-key batches — journaled commit, idempotent replay |
+| [SmokeSignal](https://github.com/RicheyWorks/SmokeSignal) | the wire — a loopback protocol face for the store |
+| [Jerky](https://github.com/RicheyWorks/Jerky) | cold storage — compressed, CRC-verified backup archives |
 
 ## Build
 
