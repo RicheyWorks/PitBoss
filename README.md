@@ -4,6 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java 17](https://img.shields.io/badge/Java-17-orange.svg)](https://adoptium.net/)
 
+> **New here — or not a coder?** Start with the [plain-English guide to the whole ecosystem →](https://github.com/RicheyWorks/WholeHog/blob/main/ECOSYSTEM.md): what all of this is, what you'd actually use it for, and how to get it running even if you've never written a line of code.
+
+
 Engine seven of the ecosystem: the **fleet conductor** — the one who runs the smokehouse
 floor. One primary, N read replicas, one caller-cadenced `tick()`: watch every replica's
 lag, re-bootstrap the gapped ones (a cold start is always acceptable, a wrong replica never
@@ -39,7 +42,7 @@ before promoting is the operator's job, stated loudly.
 
 ## The ecosystem
 
-Eleven engines, one organism — each in its own repo, composed by nested Gradle
+Fourteen engines, one organism — each in its own repo, composed by nested Gradle
 composite builds:
 
 | Engine | Role |
@@ -60,6 +63,13 @@ composite builds:
 | [Sizzle](https://github.com/RicheyWorks/Sizzle) | the chaos engine — deterministic fault injection at the write seam |
 
 ## Build
+
+**Never set up a project like this before?** You don't need to know Java or Gradle. Open [Claude](https://claude.ai) or ChatGPT and paste:
+
+> *“Walk me through installing Java 17 and running `RicheyWorks/PitBoss` from GitHub, one step at a time. I'm on Windows (or Mac) and I've never done this — keep it simple.”*
+
+It will take you the rest of the way. The full newcomer guide lives in [ECOSYSTEM.md](https://github.com/RicheyWorks/WholeHog/blob/main/ECOSYSTEM.md).
+
 
 ```bash
 # Requires ../SmokeHouse, ../SuperBeefSort, ../CSRBT cloned as siblings (nested composite build)
