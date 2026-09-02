@@ -2,6 +2,8 @@ package io.github.richeyworks.pitboss;
 
 import io.github.richeyworks.smokehouse.SmokeHouse;
 import io.github.richeyworks.smokehouse.SmokeHouseOptions;
+import io.github.richeyworks.smokehouse.TailEvent;
+import io.github.richeyworks.smokehouse.TailListener;
 import io.github.richeyworks.superbeefsort.external.SpillSerializer;
 
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,46 @@ class PitBossTest {
             store.range(store.firstKey(), store.lastKey(), out::put);
         }
         return out;
+    }
+
+    @Test
+    void aHeldBackReplicaReportsItsLagFromTheConductorsSeat(@TempDir Path primaryDir,
+                                                            @TempDir Path a) throws IOException {
+        // The feed seam held back for real (2026-09-02). The first time it was, the fleet
+        // reported lag 0 for a replica twenty frames behind: Replica.lagSequence() is measured
+        // from the last frame the replica RECEIVED, and a held-back replica has not received
+        // the frame that would tell it. The conductor holds the primary, so it measures from
+        // there.
+        Random rnd = new Random(9);
+        TreeMap<Long, String> oracle = new TreeMap<>();
+        try (SmokeHouse<Long, String> primary = SmokeHouse.open(primaryDir, opts());
+             PitBoss<Long, String> boss = PitBoss.over(primary, opts(), true,
+                     inner -> new TailListener<Long, String>() {
+                         @Override
+                         public void onEvent(TailEvent<Long, String> event) {
+                             try {
+                                 Thread.sleep(50);
+                             } catch (InterruptedException e) {
+                                 Thread.currentThread().interrupt();
+                             }
+                             inner.onEvent(event);
+                         }
+
+                         @Override
+                         public void onGap() {
+                             inner.onGap();
+                         }
+                     })) {
+            boss.addReplica("a", a);
+            assertTrue(boss.replica("a").awaitCaughtUp(primary.tailSequence(), AWAIT));
+            churn(primary, oracle, rnd, 20);                   // ~1 s of frames still to come
+            PitBoss.ReplicaStatus held = boss.tick().replicas().get(0);
+            assertTrue(held.lag() > 0, "the fleet reports a held-back replica as behind: " + held);
+            assertFalse(held.gapped(), "behind is not gapped");
+            assertTrue(boss.replica("a").awaitCaughtUp(primary.tailSequence(), AWAIT));
+            assertEquals(0, boss.tick().replicas().get(0).lag(), "and caught up once the feed lands");
+            assertEquals(oracle, scan(boss.replica("a").store()));
+        }
     }
 
     @Test

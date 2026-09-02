@@ -4,6 +4,7 @@ import io.github.richeyworks.smokehouse.Replica;
 import io.github.richeyworks.smokehouse.ReplicationServer;
 import io.github.richeyworks.smokehouse.SmokeHouse;
 import io.github.richeyworks.smokehouse.SmokeHouseOptions;
+import io.github.richeyworks.smokehouse.TailListener;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -15,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /**
  * PitBoss — engine seven of the ecosystem: the fleet conductor, the one who runs the
@@ -33,7 +35,13 @@ import java.util.Objects;
  */
 public final class PitBoss<K, V> implements Closeable {
 
-    /** One replica's vitals at a {@link #tick()}, plus what the policy did about them. */
+    /**
+     * One replica's vitals at a {@link #tick()}, plus what the policy did about them.
+     * {@code lag} is measured from the conductor's seat — the primary's committed sequence
+     * minus what the replica has applied — not from the replica's own last frame: a replica
+     * whose feed is held back has not yet heard how far behind it is, and reported zero
+     * (found 2026-09-02 the first time the feed was actually held back).
+     */
     public record ReplicaStatus(String name, long lag, boolean gapped, boolean rebootstrapped) { }
 
     /** One tick's verdict over the whole floor. */
@@ -63,9 +71,22 @@ public final class PitBoss<K, V> implements Closeable {
     public static <K, V> PitBoss<K, V> over(SmokeHouse<K, V> primary,
                                             SmokeHouseOptions<K, V> opts,
                                             boolean autoRebootstrap) throws IOException {
+        return over(primary, opts, autoRebootstrap, UnaryOperator.identity());
+    }
+
+    /**
+     * As {@link #over(SmokeHouse, SmokeHouseOptions, boolean)}, with a wrapper applied to
+     * every replica's feed listener before it is subscribed — SmokeHouse's feed seam, passed
+     * through. A {@code Sizzle.slow} here holds the whole fleet behind the primary for real.
+     */
+    public static <K, V> PitBoss<K, V> over(SmokeHouse<K, V> primary,
+                                            SmokeHouseOptions<K, V> opts,
+                                            boolean autoRebootstrap,
+                                            UnaryOperator<TailListener<K, V>> feed) throws IOException {
         Objects.requireNonNull(primary, "primary");
         Objects.requireNonNull(opts, "opts");
-        return new PitBoss<>(primary, opts, ReplicationServer.serve(primary, opts),
+        Objects.requireNonNull(feed, "feed");
+        return new PitBoss<>(primary, opts, ReplicationServer.serve(primary, opts, feed),
                 autoRebootstrap);
     }
 
@@ -110,9 +131,14 @@ public final class PitBoss<K, V> implements Closeable {
                 rebooted = true;
                 gapped = r.gapped();
             }
-            statuses.add(new ReplicaStatus(name, r.lagSequence(), gapped, rebooted));
+            statuses.add(new ReplicaStatus(name, lagOf(r), gapped, rebooted));
         }
         return new FleetReport(primary.tailSequence(), statuses);
+    }
+
+    /** The replica's lag as the conductor sees it: committed on the primary, not yet applied here. */
+    private long lagOf(Replica<K, V> r) {
+        return Math.max(0, (primary.tailSequence() - 1) - r.appliedSequence());
     }
 
     /**
