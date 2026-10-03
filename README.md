@@ -4,6 +4,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Java 17](https://img.shields.io/badge/Java-17-orange.svg)](https://adoptium.net/)
 
+**Replica monitoring, rebootstrap, and operator-triggered promotion over SmokeHouse replication.**
+
+[Quickstart](#quickstart) · [API example](#api-example) · [Design & scope](#design-notes) · [Build](#build) · [Ecosystem](#the-ecosystem)
+
+| Project | At a glance |
+| --- | --- |
+| Stage | Implemented Java library · source version `0.1.0` |
+| Setup | Java 17+ · bundled Gradle 9.5.1 · sibling composite builds |
+| Scope | Promotion is manual; fencing the previous primary remains the operator’s responsibility. |
+| Code | [Implementation](src/main/java/io/github/richeyworks/pitboss/PitBoss.java) · [Tests](src/test/java/) |
+
 > **New here — or not a coder?** Start with the [plain-English guide to the whole ecosystem →](https://github.com/RicheyWorks/WholeHog/blob/main/ECOSYSTEM.md): what all of this is, what you'd actually use it for, and how to get it running even if you've never written a line of code.
 
 
@@ -11,6 +22,21 @@ Engine seven of the ecosystem: the **fleet conductor** — the one who runs the 
 floor. One primary, N read replicas, one caller-cadenced `tick()`: watch every replica's
 lag, re-bootstrap the gapped ones (a cold start is always acceptable, a wrong replica never
 is), and run the **promotion runbook** as one audited operation.
+
+## Quickstart
+
+With Git and Java 17+ installed, run this from an empty parent folder in PowerShell. Keep the repositories side by side: the build resolves them from source.
+
+```powershell
+'CSRBT','SmokeHouse','SuperBeefSort','PitBoss' |
+  ForEach-Object { git clone "https://github.com/RicheyWorks/$_.git" }
+Set-Location PitBoss
+.\gradlew.bat test
+```
+
+The bundled wrapper downloads Gradle and the build resolves dependencies on the first run. This command runs PitBoss's tests; see [Build](#build) for the full build and the existing Bash command.
+
+## API example
 
 ```java
 try (var primary = SmokeHouse.open(dir, opts);
